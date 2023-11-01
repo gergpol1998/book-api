@@ -1,0 +1,7 @@
+Flask
+Flask-Cors
+pandas
+numpy
+scikit-learn
+mysql-connector-python
+sqlalchemy

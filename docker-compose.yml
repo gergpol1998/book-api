@@ -1,0 +1,41 @@
+version: '3'
+
+services:
+  flask_app1:
+    build:
+      context: ./api-1
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    volumes:
+      - .:/app
+      - ./users-score-2023.csv:/app/users-score-2023.csv
+    working_dir: /app
+    environment:
+      - FLASK_APP=app.py
+
+  flask_app2:
+    build:
+      context: ./api-2
+      dockerfile: Dockerfile
+    ports:
+      - "5002:5002"
+    volumes:
+      - .:/app
+    working_dir: /app
+    environment:
+      - FLASK_APP=app.py
+  
+  flask_app3:
+    build:
+      context: ./api-3
+      dockerfile: Dockerfile
+    ports:
+      - "5003:5003"
+    volumes:
+      - .:/app
+      - ./anime-dataset-2023.csv:/app/anime-dataset-2023.csv
+    working_dir: /app
+    environment:
+      - FLASK_APP=app.py
+
