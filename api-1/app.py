@@ -71,10 +71,12 @@ def random_book_recommendation(n=5):
     random_books = rating_df.sample(n)
     return random_books.to_dict(orient='records')
 
-
-# ฟังก์ชันแนะนำหนังสือ
-def recommend(book_name):
+def recommend(book_name, already_recommended):
     try:
+        # ตรวจสอบว่าหนังสือนี้ได้รับแนะนำไว้แล้วหรือไม่
+        if book_name in already_recommended:
+            return None
+
         # หาดัชนีของหนังสือในตาราง
         index = np.where(pt.index == book_name)[0][0]
         # ดึงหนังสือที่มีความคล้ายคลึงกันมากที่สุด
@@ -83,13 +85,16 @@ def recommend(book_name):
         data = []
         for i in similar_items:
             item = {}
-            # ดึงรายละเอียดสำหรับแต่ละหนังสือที่แนะนำ
-            temp_df = rating_df[rating_df['book_name'] == pt.index[i[0]]]
-            item['book_name'] = temp_df['book_name'].values[0]
-            item['book_id'] = temp_df['book_id'].values[0]
-            item['book_cover'] = temp_df['book_cover'].values[0]
-            item['book_price'] = int(temp_df['book_price'].values[0])
-            data.append(item)
+            # ตรวจสอบว่าหนังสือที่แนะนำได้รับแนะนำไว้แล้วหรือไม่
+            temp_book_name = pt.index[i[0]]
+            if temp_book_name not in already_recommended:
+                # ดึงรายละเอียดสำหรับแต่ละหนังสือที่แนะนำ
+                temp_df = rating_df[rating_df['book_name'] == temp_book_name]
+                item['book_name'] = temp_df['book_name'].values[0]
+                item['book_id'] = temp_df['book_id'].values[0]
+                item['book_cover'] = temp_df['book_cover'].values[0]
+                item['book_price'] = int(temp_df['book_price'].values[0])
+                data.append(item)
 
         # เสริมด้วยการแนะนำแบบสุ่มหากไม่พบรายการที่คล้ายคลึงกันเพียงพอ
         if len(data) < 5:
@@ -113,10 +118,18 @@ def get_recommendation():
 
     book_names = data['book_names']
     # สร้างการแนะนำสำหรับแต่ละหนังสือ
-    recommendations = [recommend(book) for book in book_names]
+    recommendations = []
+    already_recommended = set()  # เก็บรายการหนังสือที่ได้รับแนะนำไว้แล้ว
+    for book in book_names:
+        recommendation = recommend(book, already_recommended)
+        if recommendation:
+            recommendations.append(recommendation)
+            # เพิ่มรายการที่ได้รับแนะนำลงในเซต
+            already_recommended.update(rec['book_name'] for rec in recommendation)
 
     response_data = {"recommendations": recommendations}
     return jsonify(response_data)
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
