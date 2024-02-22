@@ -3,7 +3,6 @@ from flask_cors import CORS
 import pandas as pd
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from cachetools import TTLCache
 import mysql.connector
 
 app = Flask(__name__)
@@ -22,49 +21,43 @@ config = {
 connection = mysql.connector.connect(**config)
 cursor = connection.cursor()
 
-# โหลดและประมวลผลข้อมูล
-rating_df = pd.read_csv('../users-score-2023.csv')
-pt_cache = TTLCache(maxsize=100, ttl=300)
 
 # ดึงข้อมูลหนังสือจากตาราง 'book' ในฐานข้อมูล
-book_query = "SELECT * FROM book"
+book_query = "SELECT book_id,book_name,book_cover,book_price,bscore_score,bscore_cusid FROM book JOIN bookscore ON bscore_bookid = book_id"
 cursor.execute(book_query)
 book_data = cursor.fetchall()
 book_columns = [column[0] for column in cursor.description]
-book_df = pd.DataFrame(book_data, columns=book_columns)
-
-# ผสานข้อมูลการให้คะแนนกับข้อมูลหนังสือตามชื่อหนังสือ
-rating_df = rating_df.merge(book_df, left_on='Anime Title', right_on='book_name', how="left")
+rating_df = pd.DataFrame(book_data, columns=book_columns)
 
 def preprocess_data():
     # คำนวณจำนวนการให้คะแนนต่อหนังสือ
-    num_rating_df = rating_df.groupby('book_name').count()['rating'].reset_index()
-    num_rating_df.rename(columns={'rating': 'num_ratings'}, inplace=True)
+    num_rating_df = rating_df.groupby('book_name').count()['bscore_score'].reset_index()
+    num_rating_df.rename(columns={'bscore_score': 'num_ratings'}, inplace=True)
 
     # คำนวณคะแนนเฉลี่ยต่อหนังสือ
-    avg_rating_df = rating_df.groupby('book_name')['rating'].mean().reset_index()
-    avg_rating_df.rename(columns={'rating': 'avg_rating'}, inplace=True)
+    avg_rating_df = rating_df.groupby('book_name')['bscore_score'].mean().reset_index()
+    avg_rating_df.rename(columns={'bscore_score': 'avg_rating'}, inplace=True)
 
     # ผสานข้อมูลจำนวนคะแนนและคะแนนเฉลี่ย
     popular_df = num_rating_df.merge(avg_rating_df, on='book_name')
 
     # กรองหนังสือที่มีความนิยม
-    popular_df = popular_df[popular_df['num_ratings'] >= 250].sort_values('avg_rating', ascending=False).head(50)
+    popular_df = popular_df[popular_df['num_ratings'] >= 3].sort_values('avg_rating', ascending=False).head(50)
 
     # ระบุผู้ใช้ที่ใช้งานอยู่
-    x = rating_df.groupby('user_id').count()['rating'] > 200
+    x = rating_df.groupby('bscore_cusid').count()['bscore_score'] > 2
     padhe_likhe_users = x[x].index
 
     # กรองการให้คะแนนจากผู้ใช้ที่ใช้งานอยู่
-    filtered_rating = rating_df[rating_df['user_id'].isin(padhe_likhe_users)]
+    filtered_rating = rating_df[rating_df['bscore_cusid'].isin(padhe_likhe_users)]
 
     # ระบุหนังสือที่มีชื่อเสียง
-    y = filtered_rating.groupby('book_name').count()['rating'] >= 50
+    y = filtered_rating.groupby('book_name').count()['bscore_score'] >= 5
     famous_books = y[y].index
 
     # สร้างตารางคะแนนสุดท้าย
     final_ratings = filtered_rating[filtered_rating['book_name'].isin(famous_books)]
-    pt = final_ratings.pivot_table(index='book_name', columns='user_id', values='rating')
+    pt = final_ratings.pivot_table(index='book_name', columns='bscore_cusid', values='bscore_score')
     pt.fillna(0, inplace=True)
 
     return pt
@@ -75,8 +68,9 @@ similarity_scores = cosine_similarity(pt)
 
 def random_book_recommendation(n=5):
     # สุ่มเลือกหนังสือจากฐานข้อมูล
-    random_books = book_df.sample(n)
+    random_books = rating_df.sample(n)
     return random_books.to_dict(orient='records')
+
 
 # ฟังก์ชันแนะนำหนังสือ
 def recommend(book_name):
